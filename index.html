@@ -1,1 +1,1877 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rico's Cold Night - Defensive Edition</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a; /* visible background if canvas fails */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            color: #dcdcdc;
+            touch-action: none; /* Prevent browser zooming/scrolling */
+        }
+
+        #game-container {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            background: #222; /* Fallback color, never black */
+            border: 1px solid #333;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            cursor: none;
+        }
+
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .dialogue-box {
+            background-color: #1a1a1d;
+            border: 2px solid #4a4a4e;
+            margin: 20px 60px;
+            padding: 20px;
+            min-height: 100px;
+            display: none;
+            pointer-events: auto;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+            font-family: 'Courier New', monospace;
+            image-rendering: pixelated;
+            z-index: 10;
+        }
+
+        .dialogue-text {
+            color: #bdc3c7;
+            font-size: 18px;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .option-btn {
+            background: #2c2c30;
+            border: 1px solid #3c3c40;
+            color: #95a5a6;
+            padding: 8px 12px;
+            cursor: pointer;
+            text-align: left;
+            font-family: inherit;
+            font-size: 16px;
+        }
+
+        .option-btn:hover, .option-btn:focus {
+            background: #3c3c40;
+            color: #f39c12;
+            outline: none;
+            border-color: #555;
+        }
+
+        #interaction-prompt {
+            position: absolute;
+            bottom: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            background: rgba(0,0,0,0.7);
+            padding: 6px 10px;
+            border-radius: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            text-shadow: 1px 1px 0 #000;
+            border: 1px solid #444;
+            z-index: 5;
+        }
+
+        /* --- MOBILE CONTROLS --- */
+        #mobile-controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            height: 140px;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            z-index: 20;
+        }
+
+        .dpad {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            pointer-events: auto;
+        }
+
+        .d-btn {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            cursor: pointer;
+            user-select: none;
+            border-radius: 4px;
+        }
+
+        .d-btn:active, .d-btn.active {
+            background: rgba(255, 215, 0, 0.3);
+            color: #fff;
+            border-color: rgba(255, 215, 0, 0.5);
+        }
+
+        #btn-up { top: 0; left: 48px; }
+        #btn-down { bottom: 0; left: 48px; }
+        #btn-left { top: 48px; left: 0; }
+        #btn-right { top: 48px; right: 0; }
+
+        #action-container {
+            pointer-events: auto;
+            width: 100px;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #btn-action {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 24px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            cursor: pointer;
+        }
+
+        #btn-action:active, #btn-action.active {
+            background: rgba(255, 215, 0, 0.3);
+            border-color: rgba(255, 215, 0, 0.5);
+            color: #fff;
+        }
+
+        /* --- FLOOD UI --- */
+        #water-meter-container {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 24px;
+            background: rgba(0,0,0,0.6);
+            border: 2px solid #fff;
+            display: none; /* Hidden by default */
+            z-index: 50;
+        }
+        #water-meter-fill {
+            width: 0%;
+            height: 100%;
+            background: #3498db;
+            transition: width 0.1s linear;
+        }
+        #water-label {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 2px;
+            font-size: 14px;
+            color: #fff;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        #restart-btn {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            background: #c0392b;
+            color: white;
+            font-family: 'Courier New', monospace;
+            font-size: 20px;
+            border: 2px solid #fff;
+            cursor: pointer;
+            display: none;
+            pointer-events: auto;
+            z-index: 100;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        #restart-btn:hover { background: #e74c3c; }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="640" height="480"></canvas>
+
+    <div id="ui-layer">
+        <!-- Flood Meter -->
+        <div id="water-meter-container">
+            <div id="water-meter-fill"></div>
+            <div id="water-label">WATER LEVEL</div>
+        </div>
+
+        <div id="interaction-prompt">Press E to Interact</div>
+        <div id="dialogue-box" class="dialogue-box">
+            <div id="dialogue-text" class="dialogue-text"></div>
+            <div id="options-container" class="options-container"></div>
+        </div>
+
+        <!-- Mobile Controls Overlay -->
+        <div id="mobile-controls">
+            <div class="dpad">
+                <div class="d-btn" id="btn-up" data-key="w">▲</div>
+                <div class="d-btn" id="btn-left" data-key="a">◀</div>
+                <div class="d-btn" id="btn-right" data-key="d">▶</div>
+                <div class="d-btn" id="btn-down" data-key="s">▼</div>
+            </div>
+            <div id="action-container">
+                <div id="btn-action" data-key="e">E</div>
+            </div>
+        </div>
+    </div>
+
+    <button id="restart-btn">RESTART GAME</button>
+</div>
+
+<script>
+/**
+ * --- DEFENSIVE ENGINE CONFIGURATION ---
+ */
+const CONFIG = {
+    DEBUG_MODE: false,
+    SAFE_MODE: false, // Auto-enabled on crash
+    TILE_SIZE: 32,
+    ROWS: 15,
+    COLS: 20,
+    VIEWPORT_W: 640,
+    VIEWPORT_H: 480
+};
+
+// Global Error Handler - The "Red Screen of Death" fallback
+window.addEventListener("error", (e) => {
+    CONFIG.SAFE_MODE = true;
+    const c = document.getElementById("gameCanvas");
+    if (!c) return;
+    const x = c.getContext("2d");
+    if (!x) return;
+
+    x.save();
+    x.globalCompositeOperation = "source-over";
+    x.fillStyle = "rgba(50, 0, 0, 0.8)";
+    x.fillRect(0, 0, c.width, c.height);
+
+    x.fillStyle = "#ff5555";
+    x.font = "bold 16px monospace";
+    x.fillText("CRITICAL ERROR", 20, 30);
+    x.fillStyle = "#ffffff";
+    x.font = "12px monospace";
+    x.fillText(String(e.message || e.error || "Unknown Error").substring(0, 80), 20, 50);
+    x.fillText("Game switched to SAFE MODE. Attempting to continue...", 20, 70);
+    x.restore();
+    console.error("Game Error:", e);
+});
+
+// Keys Input State
+const KEYS = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, e: false };
+
+// 4x4 Bayer Matrix for dithering
+const BAYER = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5]
+];
+
+// --- SAFE ASSET MANAGEMENT ---
+
+// Default Palette to prevent undefined crashes
+const DEFAULT_PALETTE = {
+    grass: ['#283828'], dirt: ['#332620'], stone: ['#2c2c2c'],
+    void: '#111', ambient: 'rgba(0,0,0,0.5)'
+};
+
+const PALETTES = {
+    forest: {
+        grass: ['#283828', '#3e523e', '#5a7550'],
+        dirt:  ['#332620', '#4d3b32', '#6b5446'],
+        stone: ['#2c2c2c', '#444444', '#5e5e5e', '#777777'],
+        void:  '#0b0d10', ambient: 'rgba(4, 4, 10, 0.85)'
+    },
+    ruins: {
+        grass: ['#1a1a20', '#2a2a35', '#3a3a45'],
+        dirt:  ['#202025', '#303035', '#454550'],
+        stone: ['#303030', '#505055', '#707075', '#909095'],
+        void:  '#050508', ambient: 'rgba(2, 2, 5, 0.92)'
+    },
+    cabin: {
+        grass: ['#3d2e1e', '#5c4033', '#795548'],
+        dirt:  ['#282828', '#383838', '#484848'],
+        stone: ['#4e342e', '#6d4c41', '#8d6e63', '#a1887f'],
+        void:  '#1a1a1a', ambient: 'rgba(50, 20, 0, 0.3)'
+    }
+};
+
+let currentPalette = PALETTES.forest || DEFAULT_PALETTE;
+
+// Seeded PRNG
+function createRng(seed) {
+    return function() {
+      var t = seed += 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+}
+const rng = createRng(42069);
+
+const assets = {
+    tiles: {}, edges: {}, shadows: {}, bg: null, lightMask: null, lightCtx: null
+};
+
+// Fallback image generator
+function createPlaceholderImage(color) {
+    const c = document.createElement('canvas');
+    c.width = 32; c.height = 32;
+    const x = c.getContext('2d');
+    x.fillStyle = color;
+    x.fillRect(0,0,32,32);
+    x.strokeStyle = '#fff';
+    x.strokeRect(0,0,32,32);
+    return c;
+}
+
+// Helpers
+function hexToRgb(hex) {
+    if (!hex || typeof hex !== 'string') return {r:0,g:0,b:0};
+    const bigint = parseInt(hex.replace('#',''), 16);
+    return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+}
+
+function ditherColor(val, x, y, palette) {
+    if (!Array.isArray(palette) || palette.length === 0) return {r:255,g:0,b:255};
+    const threshold = BAYER[(y||0) % 4][(x||0) % 4] / 16.0;
+    const range = palette.length - 1;
+    const scaled = val * range;
+    const floor = Math.floor(scaled);
+    const rem = scaled - floor;
+    let idx = floor;
+    if (rem > threshold) idx++;
+    idx = Math.max(0, Math.min(idx, range));
+    return hexToRgb(palette[idx] || palette[0]);
+}
+
+function createImageDataFromGen(w, h, genFunc) {
+    try {
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        const id = ctx.createImageData(w, h);
+        const d = id.data;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const idx = (y * w + x) * 4;
+                const res = genFunc(x, y);
+                d[idx] = res.r; d[idx+1] = res.g; d[idx+2] = res.b; d[idx+3] = res.a !== undefined ? res.a : 255;
+            }
+        }
+        ctx.putImageData(id, 0, 0);
+        return c;
+    } catch(e) {
+        console.warn("Asset gen failed", e);
+        return createPlaceholderImage('#f0f');
+    }
+}
+
+function generateAssets() {
+    const p = currentPalette || DEFAULT_PALETTE;
+
+    const safeGen = (cb) => (x, y) => {
+        try { return cb(x, y); } catch { return {r:128,g:128,b:128,a:255}; }
+    };
+
+    assets.tiles.grass = createImageDataFromGen(32, 32, safeGen((x, y) => {
+        const n = rng();
+        let val = (n * 0.3 + 0.6);
+        if (rng() > 0.98) val = 1.2;
+        if (rng() < 0.05) val = 0.2;
+        return ditherColor(Math.min(1, val), x, y, p.grass || ['#0f0']);
+    }));
+
+    assets.tiles.path = createImageDataFromGen(32, 32, safeGen((x, y) => {
+        const n = rng();
+        const cx = (x - 16) / 16;
+        const cy = (y - 16) / 16;
+        const vign = 1.0 - ((cx*cx + cy*cy) * 0.6);
+        let val = (n * 0.4 + 0.45) * vign;
+        if (rng() > 0.96) val += 0.3;
+        return ditherColor(Math.min(1, val), x, y, p.dirt || ['#533']);
+    }));
+
+    assets.tiles.wallTop = createImageDataFromGen(32, 32, safeGen((x, y) => {
+        let val = 0.6 + (rng() - 0.5) * 0.2;
+        if (rng() > 0.96) val -= 0.4;
+        return ditherColor(Math.max(0, val), x, y, p.stone || ['#888']);
+    }));
+
+    assets.tiles.wallFace = createImageDataFromGen(32, 32, safeGen((x, y) => {
+        let val = 0.4 + (rng() - 0.5) * 0.1;
+        val *= (0.5 + (y/32)*0.6);
+        if (x % 8 === 0) val -= 0.1;
+        if (y > 24 && rng() > 0.8) val -= 0.15;
+        return ditherColor(Math.max(0, val), x, y, p.stone || ['#888']);
+    }));
+
+    assets.tiles.spike = createImageDataFromGen(32, 32, safeGen((x, y) => {
+        const cx = 16, cy = 16;
+        const d = Math.sqrt((x-cx)**2 + (y-cy)**2);
+        if (d < 12) {
+             const angle = Math.atan2(y-cy, x-cx);
+             const spike = Math.abs(Math.sin(angle * 4));
+             if (d < 5 + spike * 7) return {r:140, g:50, b:50, a:255};
+        }
+        return ditherColor(rng()*0.5 + 0.2, x, y, p.dirt || ['#533']);
+    }));
+
+    // Edges
+    const createEdge = (dir) => createImageDataFromGen(32, 32, (x, y) => {
+        let mask = 0;
+        const n = rng();
+        if (dir === 'top') mask = (y < 8 + n*4) ? 1 : 0;
+        if (dir === 'bot') mask = (y > 24 - n*4) ? 1 : 0;
+        if (dir === 'left') mask = (x < 8 + n*4) ? 1 : 0;
+        if (dir === 'right') mask = (x > 24 - n*4) ? 1 : 0;
+        return {r:0, g:0, b:0, a: mask * 100};
+    });
+    assets.shadows.top = createEdge('top');
+    assets.shadows.bot = createEdge('bot');
+    assets.shadows.left = createEdge('left');
+    assets.shadows.right = createEdge('right');
+
+    // BG
+    assets.bg = createImageDataFromGen(CONFIG.VIEWPORT_W, CONFIG.VIEWPORT_H, safeGen((x, y) => {
+        const ny = y / 480;
+        const base = hexToRgb(p.void || '#000');
+        const tint = hexToRgb((p.grass && p.grass[0]) || '#111');
+        const mix = ny * 0.25;
+        const threshold = BAYER[(y%4)||0][(x%4)||0] / 16.0;
+        const r = mix > threshold ? tint.r : base.r;
+        const g = mix > threshold ? tint.g : base.g;
+        const b = mix > threshold ? tint.b : base.b;
+        if (rng() > 0.999) return {r:220, g:220, b:230, a:255};
+        return {r, g, b, a:255};
+    }));
+
+    // Light buffer
+    if (!assets.lightMask) {
+        const lm = document.createElement('canvas');
+        lm.width = CONFIG.VIEWPORT_W; lm.height = CONFIG.VIEWPORT_H;
+        assets.lightMask = lm;
+        assets.lightCtx = lm.getContext('2d');
+    }
+}
+
+// --- SCENE DEFINITIONS ---
+// 0=Floor, 1=Wall, 2=Path, 3=Spike, 9=Door
+const DEFAULT_MAP = Array(15).fill(0).map(()=>Array(20).fill(0));
+
+/**
+ * Door routes (tile 9) are handled via E-interaction, not via edge transitions.
+ * Keep tile meanings unchanged.
+ */
+const DOOR_ROUTES = [
+    // Forest/Heidelberg -> Sandhausen Apartment
+    { scene: 'forest', x: 3, y: 10, target: 'sandhausenHouse', startX: 2, startY: 12 },
+    // Sandhausen Apartment -> Forest/Heidelberg
+    { scene: 'sandhausenHouse', x: 9, y: 13, target: 'forest', startX: 4, startY: 11 }
+];
+
+/**
+ * World-space Sandhausen house (visible object) in forest/Heidelberg.
+ * Label MUST be drawn in world coordinates (after camera translate).
+ */
+const SANDHAUSEN_HOUSE = {
+    // Positioned around the forest door tile at (3,10)
+    x: 1 * 32,
+    y: 7 * 32,
+    w: 7 * 32,
+    h: 4 * 32,
+    label: "Sandhausen Apartment",
+    doorTile: { x: 3, y: 10 }
+};
+
+const SCENES = {
+    forest: {
+        name: "HEIDELBERG",
+        paletteKey: 'forest',
+        layout: [
+            [1,1,1,1,1,1,1,1,9,9,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,9],
+            [1,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,9],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,9,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ],
+        transitions: (x, y) => {
+            if (x > 18) return { target: 'ruins', startX: 1, startY: 7 };
+            if (y < 1) return { target: 'cabin', startX: 9, startY: 13 };
+            return null;
+        }
+    },
+    ruins: {
+        name: "ANCIENT RUINS",
+        paletteKey: 'ruins',
+        layout: [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,3,3,3,0,0,1,0,0,0,0,3,3,0,0,0,1],
+            [1,0,0,0,3,3,3,0,0,1,0,0,0,0,3,3,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [9,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
+            [9,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
+            [1,0,0,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,3,3,0,0,0,0,0,0,1,1,1,1,1,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ],
+        transitions: (x, y) => {
+            if (x < 1) return { target: 'forest', startX: 18, startY: 7 };
+            return null;
+        }
+    },
+    cabin: {
+        name: "HUNTER'S CABIN",
+        paletteKey: 'cabin',
+        layout: [
+            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+            [0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0],
+            [0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+            [0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+            [0,0,0,0,0,1,0,0,0,2,2,0,0,1,0,0,0,0,0,0],
+            [0,0,0,0,0,1,0,0,0,2,2,0,0,1,0,0,0,0,0,0],
+            [0,0,0,0,0,1,0,0,0,2,2,0,0,1,0,0,0,0,0,0],
+            [0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+            [0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+            [0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+            [0,0,0,0,0,1,1,1,1,0,0,1,1,1,0,0,0,0,0,0],
+            [0,0,0,0,0,0,0,0,1,9,9,1,0,0,0,0,0,0,0,0],
+            [0,0,0,0,0,0,0,0,1,9,9,1,0,0,0,0,0,0,0,0],
+            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+        ],
+        transitions: (x, y) => {
+            if (y > 13) return { target: 'forest', startX: 9, startY: 1 };
+            return null;
+        }
+    },
+
+    // New interior scene (required)
+    sandhausenHouse: {
+        name: "SANDHAUSEN APARTMENT",
+        paletteKey: 'cabin',
+        layout: [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,0,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,9,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ],
+        transitions: () => null
+    }
+};
+
+/* --- STATE MANAGEMENT --- */
+const state = {
+    scene: 'forest',
+    isDialogueOpen: false,
+    hasRing: false,
+    proposed: false,
+    hasMetNastia: false,
+    isGameOver: false, gameOverProgress: 0,
+    rupees: 0,
+    rupeesList: [],
+    lastTime: 0, time: 0,
+    camera: { x: 0, y: 0 }, shake: 0,
+    lightingEnabled: true,
+    particles: [],
+    babies: [],
+    mapLayout: DEFAULT_MAP,
+    transitionFade: 0,
+    // Flood Events
+    floodActive: false,
+    waterLevel: 0,
+
+    // Targeted interaction
+    currentTalker: null,
+    sceneNpcs: [],
+
+    // ENEMIES (RESTORED SYSTEM)
+    enemies: [],
+    enemySpawnSeed: 1,
+
+    // DEBUG SPAWN INFO
+    debugSpawnInfo: {
+        until: 0,
+        scene: '',
+        requested: { x: null, y: null },
+        resolved: { x: null, y: null },
+        validRequested: null,
+        validResolved: null,
+        note: ''
+    }
+};
+
+const player = { name: 'Rico', x: 4 * CONFIG.TILE_SIZE, y: 6 * CONFIG.TILE_SIZE, w: 24, h: 24, speed: 150, dir: 'down', health: 3, maxHealth: 3, invulnerableUntil: 0, visible: true, isMoving: false, blushing: false };
+const npc = { name: 'Nastia', x: 10 * CONFIG.TILE_SIZE, y: 7 * CONFIG.TILE_SIZE, w: 24, h: 24, dir: 'left', active: true, isBride: false };
+const item = { name: 'Golden Ring', x: 13 * CONFIG.TILE_SIZE, y: 11 * CONFIG.TILE_SIZE, w: 24, h: 24, collected: false, active: false };
+
+// --- DIALOGUE TREE ---
+const dialogueTree = {
+    start: {
+        speaker: "Rico",
+        text: "What should I say to her?",
+        options: [
+            { text: "Hey, it's a cold night, huh?", next: "opt1" },
+            { text: "Who are you?", next: "opt2" },
+            { text: "Let's go home, watch Netflix.", next: "opt3" }
+        ]
+    },
+    opt1: {
+        speaker: "Nastia",
+        text: "Yes... but it could be worse. With you this close, I already feel safer.",
+        options: [{ text: "Close", next: "end" }]
+    },
+    opt2: {
+        speaker: "Nastia",
+        text: "Silly Rico! It's me — your Kohana!",
+        options: [{ text: "Close", next: "end" }]
+    },
+    opt3: {
+        speaker: "Nastia",
+        text: "I'm a good Christian... and I still don't see my golden ring on my finger!",
+        options: [{ text: "Close", next: "end" }]
+    },
+    reminder: {
+        speaker: "Nastia",
+        text: "It is getting really cold... Found anything warm? Or shiny?",
+        options: [{ text: "Still looking.", next: "end" }]
+    },
+
+    // --- PROPOSAL BRANCHES ---
+    proposalOptions: {
+        speaker: "Rico",
+        text: "I have the ring. This is it. What do I do?",
+        options: [
+            { text: "Give her the ring (Serious)", next: "proposalSuccess" },
+            { text: "Make a dramatic speech", next: "proposalDrama" },
+            { text: "Say: 'Keep it... I'm not ready'", next: "proposalPanic" },
+            { text: "Flirt badly", next: "proposalFlirt" }
+        ]
+    },
+    proposalSuccess: {
+        speaker: "System",
+        text: "She said yes.",
+        options: [{ text: " <3 ", next: "end", trigger: "becomeBride" }]
+    },
+    proposalDrama: {
+         speaker: "Nastia",
+         text: "Rico... breathe. You are shaking the whole world.",
+         options: [{ text: "Right. Okay.", next: "proposalOptions" }],
+         trigger: "windEffect"
+    },
+    proposalFlirt: {
+        speaker: "Nastia",
+        text: "You idiot. (She smiles)",
+        options: [{ text: "Try again.", next: "proposalOptions" }],
+        trigger: "blushEffect"
+    },
+    proposalPanic: {
+        speaker: "System",
+        text: "Rico panicked. The water rises...",
+        options: [{text: "Oh no...", next: "end", trigger: "startFlood"}]
+    },
+
+    // Post-Proposal
+    happyEnd: {
+        speaker: "Nastia",
+        text: "We should name them soon.",
+        options: [{text: "Yeah.", next: "end"}]
+    }
+};
+
+// --- Target helpers ---
+function isNastiaEntity(ent) {
+    if (!ent) return false;
+    if (ent === npc) return true;
+    if (ent.id && String(ent.id).toLowerCase().includes('nastia')) return true;
+    if (ent.name === 'Nastia') return true;
+    return false;
+}
+
+function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+
+function getTileAt(tc, tr) {
+    if (tr < 0 || tr >= CONFIG.ROWS || tc < 0 || tc >= CONFIG.COLS) return 1;
+    const row = state.mapLayout[tr];
+    if (!row) return 1;
+    return row[tc];
+}
+
+function isWalkableTile(tile) {
+    return tile === 0 || tile === 2 || tile === 9;
+}
+
+function findNearestWalkableTile(tc, tr, maxRing=10) {
+    // expanding rings, guarantee returns something in-bounds if any walkable exists
+    const inBounds = (c,r) => (r>=0 && r<CONFIG.ROWS && c>=0 && c<CONFIG.COLS);
+    if (inBounds(tc,tr) && isWalkableTile(getTileAt(tc,tr))) return { c: tc, r: tr, found: true, ring: 0 };
+
+    for (let ring = 1; ring <= maxRing; ring++) {
+        for (let dy = -ring; dy <= ring; dy++) {
+            for (let dx = -ring; dx <= ring; dx++) {
+                if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+                const c = tc + dx, r = tr + dy;
+                if (!inBounds(c,r)) continue;
+                const t = getTileAt(c,r);
+                if (isWalkableTile(t)) return { c, r, found: true, ring };
+            }
+        }
+    }
+    // fallback: scan whole map (defensive)
+    for (let r=0; r<CONFIG.ROWS; r++) {
+        for (let c=0; c<CONFIG.COLS; c++) {
+            if (isWalkableTile(getTileAt(c,r))) return { c, r, found: true, ring: 999 };
+        }
+    }
+    return { c: 1, r: 1, found: false, ring: -1 };
+}
+
+function setDebugSpawnInfo(sceneKey, requested, resolved, validRequested, validResolved, note='') {
+    state.debugSpawnInfo = {
+        until: Date.now() + 2000,
+        scene: sceneKey,
+        requested: { x: requested?.x ?? null, y: requested?.y ?? null },
+        resolved: { x: resolved?.x ?? null, y: resolved?.y ?? null },
+        validRequested,
+        validResolved,
+        note: note || ''
+    };
+}
+
+function findNearbyDoorRoute() {
+    try {
+        const pcx = Math.floor((player.x + 12)/32);
+        const pcy = Math.floor((player.y + 12)/32);
+
+        const candidates = [
+            {x: pcx, y: pcy},
+            {x: pcx+1, y: pcy},
+            {x: pcx-1, y: pcy},
+            {x: pcx, y: pcy+1},
+            {x: pcx, y: pcy-1}
+        ];
+
+        for (const t of candidates) {
+            if (getTileAt(t.x, t.y) !== 9) continue;
+            const route = DOOR_ROUTES.find(r => r.scene === state.scene && r.x === t.x && r.y === t.y);
+            if (route) return route;
+        }
+    } catch(e) {
+        console.warn("findNearbyDoorRoute failed", e);
+    }
+    return null;
+}
+
+function getNearestSceneNpc(maxDist=48) {
+    if (!Array.isArray(state.sceneNpcs) || state.sceneNpcs.length === 0) return null;
+    let best = null;
+    let bestD = Infinity;
+    const px = player.x + 12, py = player.y + 12;
+    for (const n of state.sceneNpcs) {
+        if (!n || !n.active) continue;
+        const d = Math.hypot(px - (n.x+12), py - (n.y+12));
+        if (d < bestD) { bestD = d; best = n; }
+    }
+    if (best && bestD <= maxDist) return best;
+    return null;
+}
+
+/* --- ENEMY SYSTEM (RESTORED) --- */
+const ENEMY_CONFIG = {
+    baseSpeed: 85,
+    chaseSpeed: 115,
+    sightRange: 160,
+    hitDamage: 1,
+    hitCooldownMs: 1000, // uses player.invulnerableUntil anyway
+    knockback: 90,
+    spawnPerScene: {
+        ruins: 5,
+        forest: 2,
+        cabin: 0,
+        sandhausenHouse: 0
+    }
+};
+
+function makeEnemy(id, x, y, type='rusk') {
+    return {
+        id,
+        type,
+        x, y,
+        w: 22, h: 22,
+        vx: 0, vy: 0,
+        dir: 'down',
+        state: 'patrol', // 'patrol'|'chase'
+        patrol: {
+            targetX: x,
+            targetY: y,
+            changeAt: state.time + 0.1
+        },
+        lastHitAt: 0,
+        alive: true,
+        flashUntil: 0
+    };
+}
+
+function resetEnemies() {
+    state.enemies = [];
+    state.enemySpawnSeed = (state.enemySpawnSeed || 1) + 1;
+}
+
+function spawnEnemiesForScene(sceneKey) {
+    resetEnemies();
+    const count = (ENEMY_CONFIG.spawnPerScene && ENEMY_CONFIG.spawnPerScene[sceneKey]) || 0;
+    if (!count) return;
+
+    // deterministic-ish spawn points (no external randomness needed, but use rng defensively)
+    const candidates = [];
+    for (let r=1; r<CONFIG.ROWS-1; r++) {
+        for (let c=1; c<CONFIG.COLS-1; c++) {
+            const t = getTileAt(c,r);
+            if (!isWalkableTile(t)) continue;
+            // Avoid spawning on door tiles too often
+            if (t === 9) continue;
+            candidates.push({c,r});
+        }
+    }
+    if (candidates.length === 0) return;
+
+    // lightweight shuffle using seeded rng derived from scene + seed
+    const localRng = createRng(1000 + (sceneKey.length*97) + (state.enemySpawnSeed*131));
+    for (let i=candidates.length-1; i>0; i--) {
+        const j = Math.floor(localRng() * (i+1));
+        const tmp = candidates[i]; candidates[i] = candidates[j]; candidates[j] = tmp;
+    }
+
+    const pxT = Math.floor((player.x + player.w/2)/32);
+    const pyT = Math.floor((player.y + player.h/2)/32);
+
+    let spawned = 0;
+    let idx = 0;
+    while (spawned < count && idx < candidates.length) {
+        const spot = candidates[idx++];
+        // keep some distance from player spawn
+        const d = Math.hypot(spot.c - pxT, spot.r - pyT);
+        if (d < 5) continue;
+
+        const ex = spot.c * 32 + 5;
+        const ey = spot.r * 32 + 5;
+
+        const e = makeEnemy(`${sceneKey}_e${spawned}`, ex, ey, 'rusk');
+        // set patrol target a bit away
+        const pt = findNearestWalkableTile(spot.c + (localRng()>0.5?3:-3), spot.r + (localRng()>0.5?2:-2), 6);
+        e.patrol.targetX = pt.c * 32 + 5;
+        e.patrol.targetY = pt.r * 32 + 5;
+        e.patrol.changeAt = state.time + 0.25 + localRng()*1.25;
+        state.enemies.push(e);
+        spawned++;
+    }
+
+    // guarantee at least 1 enemy in ruins (mandatory requirement)
+    if (sceneKey === 'ruins' && state.enemies.length === 0) {
+        const fallback = findNearestWalkableTile(2, 12, 12);
+        state.enemies.push(makeEnemy(`${sceneKey}_e0`, fallback.c*32+5, fallback.r*32+5, 'rusk'));
+    }
+}
+
+function isSolidTileAt(c, r) {
+    return getTileAt(c,r) === 1;
+}
+
+function isSolidRect(x, y, w, h) {
+    const corners = [
+        {x, y},
+        {x:x+w, y},
+        {x, y:y+h},
+        {x:x+w, y:y+h}
+    ];
+    for (let p of corners) {
+        const c = Math.floor(p.x/CONFIG.TILE_SIZE);
+        const r = Math.floor(p.y/CONFIG.TILE_SIZE);
+        if (r<0||r>=CONFIG.ROWS||c<0||c>=CONFIG.COLS) return true;
+        if (isSolidTileAt(c,r)) return true;
+    }
+    return false;
+}
+
+function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+function applyKnockbackToPlayer(fromX, fromY, strength) {
+    const px = player.x + player.w/2;
+    const py = player.y + player.h/2;
+    let dx = px - fromX;
+    let dy = py - fromY;
+    const mag = Math.hypot(dx, dy) || 1;
+    dx /= mag; dy /= mag;
+    const kx = dx * strength;
+    const ky = dy * strength;
+
+    // attempt axis-based knockback without tunneling into walls
+    let nx = player.x + kx;
+    if (!isColliding(nx, player.y, player.w, player.h)) player.x = nx;
+    let ny = player.y + ky;
+    if (!isColliding(player.x, ny, player.w, player.h)) player.y = ny;
+}
+
+function damagePlayer(amount, sourceX, sourceY) {
+    const now = Date.now();
+    if (now <= player.invulnerableUntil) return;
+    player.health -= amount;
+    player.invulnerableUntil = now + 1000;
+    state.shake = Math.max(state.shake, 10);
+    if (Number.isFinite(sourceX) && Number.isFinite(sourceY)) applyKnockbackToPlayer(sourceX, sourceY, ENEMY_CONFIG.knockback);
+    if (player.health <= 0) state.isGameOver = true;
+}
+
+function pickEnemyPatrolTarget(e) {
+    // choose a new walkable tile nearby in a small ring
+    const ec = Math.floor((e.x + e.w/2)/32);
+    const er = Math.floor((e.y + e.h/2)/32);
+    const localRng = createRng(9000 + (ec*31) + (er*71) + Math.floor(state.time*10));
+    const dx = (localRng()>0.5?1:-1) * (2 + Math.floor(localRng()*4));
+    const dy = (localRng()>0.5?1:-1) * (1 + Math.floor(localRng()*3));
+    const pt = findNearestWalkableTile(ec + dx, er + dy, 8);
+    e.patrol.targetX = pt.c * 32 + 5;
+    e.patrol.targetY = pt.r * 32 + 5;
+    e.patrol.changeAt = state.time + 0.8 + localRng()*1.6;
+}
+
+function updateEnemies(dt) {
+    if (!Array.isArray(state.enemies) || state.enemies.length === 0) return;
+    if (state.isDialogueOpen || state.isGameOver) return; // freeze on dialogue/gameover
+
+    const px = player.x + player.w/2;
+    const py = player.y + player.h/2;
+
+    for (const e of state.enemies) {
+        if (!e || !e.alive) continue;
+
+        // Determine AI state
+        const ex = e.x + e.w/2;
+        const ey = e.y + e.h/2;
+        const dist = Math.hypot(px - ex, py - ey);
+
+        if (!state.floodActive && dist <= ENEMY_CONFIG.sightRange) e.state = 'chase';
+        else e.state = 'patrol';
+
+        // Decide target
+        let tx = e.patrol.targetX, ty = e.patrol.targetY;
+        let speed = ENEMY_CONFIG.baseSpeed;
+        if (e.state === 'chase') {
+            tx = px; ty = py;
+            speed = ENEMY_CONFIG.chaseSpeed;
+        } else {
+            if (!Number.isFinite(e.patrol.changeAt) || state.time >= e.patrol.changeAt || Math.hypot(tx - ex, ty - ey) < 10) {
+                pickEnemyPatrolTarget(e);
+            }
+        }
+
+        // Steer
+        let vx = tx - ex;
+        let vy = ty - ey;
+        const m = Math.hypot(vx, vy) || 1;
+        vx = (vx / m) * speed;
+        vy = (vy / m) * speed;
+
+        // Dampen tiny movement
+        if (m < 6) { vx = 0; vy = 0; }
+
+        e.vx = vx; e.vy = vy;
+
+        // Update facing dir for visuals
+        if (Math.abs(vx) > Math.abs(vy)) e.dir = vx < 0 ? 'left' : 'right';
+        else e.dir = vy < 0 ? 'up' : 'down';
+
+        // Move with wall collision
+        const nx = e.x + e.vx * dt;
+        if (!isSolidRect(nx, e.y, e.w, e.h)) e.x = nx;
+        else {
+            // slide attempt: small nudge away, prevents sticking
+            e.vx = 0;
+            if (e.state === 'patrol') pickEnemyPatrolTarget(e);
+        }
+
+        const ny = e.y + e.vy * dt;
+        if (!isSolidRect(e.x, ny, e.w, e.h)) e.y = ny;
+        else {
+            e.vy = 0;
+            if (e.state === 'patrol') pickEnemyPatrolTarget(e);
+        }
+
+        // Player contact damage
+        if (!state.floodActive && aabb(e.x, e.y, e.w, e.h, player.x, player.y, player.w, player.h)) {
+            damagePlayer(ENEMY_CONFIG.hitDamage, ex, ey);
+            e.flashUntil = Date.now() + 120;
+        }
+    }
+}
+
+/* --- SPAWN SAFETY (FIX STUCK IN WALLS BUG PERMANENTLY) --- */
+function applySpawnSafety(sceneKey, requestedTileX, requestedTileY) {
+    const req = { x: requestedTileX, y: requestedTileY };
+
+    const tileC = Math.floor((player.x + player.w/2) / 32);
+    const tileR = Math.floor((player.y + player.h/2) / 32);
+
+    const validReq = (requestedTileX !== undefined && requestedTileY !== undefined)
+        ? isWalkableTile(getTileAt(requestedTileX, requestedTileY))
+        : null;
+
+    const validNow = isWalkableTile(getTileAt(tileC, tileR));
+
+    if (validNow) {
+        setDebugSpawnInfo(sceneKey, req, { x: tileC, y: tileR }, validReq, true, 'spawn ok');
+        return;
+    }
+
+    const found = findNearestWalkableTile(tileC, tileR, 12);
+    player.x = found.c * 32 + 4; // small inset prevents edge collisions
+    player.y = found.r * 32 + 4;
+
+    const resolvedC = Math.floor((player.x + player.w/2)/32);
+    const resolvedR = Math.floor((player.y + player.h/2)/32);
+    const validResolved = isWalkableTile(getTileAt(resolvedC, resolvedR));
+
+    setDebugSpawnInfo(
+        sceneKey,
+        req,
+        { x: resolvedC, y: resolvedR },
+        validReq,
+        validResolved,
+        validResolved ? `spawn corrected (ring ${found.ring})` : 'spawn correction failed'
+    );
+}
+
+// --- SAFE LOAD SCENE ---
+function loadScene(sceneKey, startX, startY) {
+    try {
+        if (!SCENES[sceneKey]) {
+            console.error("Missing scene:", sceneKey);
+            sceneKey = 'forest';
+        }
+
+        const sData = SCENES[sceneKey] || SCENES['forest'];
+        state.scene = sceneKey;
+
+        currentPalette = PALETTES[sData.paletteKey] || DEFAULT_PALETTE;
+
+        generateAssets();
+
+        state.mapLayout = (sData.layout || DEFAULT_MAP).map(row => [...(row || [])]);
+
+        const reqX = startX;
+        const reqY = startY;
+
+        if (startX !== undefined) player.x = startX * CONFIG.TILE_SIZE;
+        if (startY !== undefined) player.y = startY * CONFIG.TILE_SIZE;
+
+        // Spawn safety (prevents stuck-in-wall softlocks forever)
+        applySpawnSafety(sceneKey, reqX, reqY);
+
+        state.camera.x = player.x + player.w/2 - CONFIG.VIEWPORT_W/2;
+        state.camera.y = player.y + player.h/2 - CONFIG.VIEWPORT_H/2;
+
+        // Exterior Nastia only in forest/Heidelberg
+        npc.active = (sceneKey === 'forest');
+        item.active = (sceneKey === 'ruins' && !item.collected);
+
+        // Scene NPCs (interior)
+        state.sceneNpcs = [];
+        if (sceneKey === 'sandhausenHouse') {
+            // Three roommates: Ecuador, Japan, Nastia (indoor)
+            state.sceneNpcs.push({
+                id: "ecuadorRoommate",
+                name: "Ecuador",
+                x: 3 * 32, y: 3 * 32,
+                w: 24, h: 24, dir: 'down',
+                active: true,
+                isBride: false
+            });
+            state.sceneNpcs.push({
+                id: "japanRoommate",
+                name: "Japan",
+                x: 9 * 32, y: 3 * 32,
+                w: 24, h: 24, dir: 'down',
+                active: true,
+                isBride: false
+            });
+            state.sceneNpcs.push({
+                id: "nastiaIndoor",
+                name: "Nastia",
+                x: 14 * 32, y: 9 * 32,
+                w: 24, h: 24, dir: 'left',
+                active: true,
+                // Mirror proposal state visually
+                get isBride() { return npc.isBride; },
+                set isBride(v) { /* no-op (mirrors) */ }
+            });
+        }
+
+        // Keep a valid talker if dialogue is open; otherwise clear
+        if (!state.isDialogueOpen) state.currentTalker = null;
+
+        state.rupeesList = [];
+        if (sceneKey === 'forest') {
+            state.rupeesList.push({x: 5*32, y: 4*32, collected: false});
+        } else if (sceneKey === 'ruins') {
+            state.rupeesList.push({x: 2*32, y: 2*32, collected: false});
+            state.rupeesList.push({x: 18*32, y: 12*32, collected: false});
+        }
+
+        // Restore babies if proposed
+        if (state.proposed && sceneKey === 'forest') {
+            spawnBabies();
+        }
+
+        // Enemies spawn per scene (RESTORED)
+        spawnEnemiesForScene(sceneKey);
+
+        state.particles = [];
+        ensureUI();
+    } catch(e) {
+        console.error("LoadScene Failed", e);
+        state.mapLayout = DEFAULT_MAP;
+    }
+}
+
+function spawnBabies() {
+    state.babies = [
+        {x: npc.x - 20, y: npc.y + 10, color: '#f39c12'},
+        {x: npc.x + 30, y: npc.y + 5, color: '#3498db'},
+        {x: npc.x + 10, y: npc.y + 25, color: '#e74c3c'}
+    ];
+}
+
+// UI Safe Guard
+function ensureUI() {
+    const ui = document.getElementById('ui-layer');
+    if (!ui) return;
+
+    if (!document.getElementById('interaction-prompt')) {
+        const p = document.createElement('div');
+        p.id = 'interaction-prompt';
+        p.innerText = "Press E to Interact";
+        ui.appendChild(p);
+    }
+
+    if (!document.getElementById('dialogue-box')) {
+        const db = document.createElement('div');
+        db.id = 'dialogue-box';
+        db.className = 'dialogue-box';
+        db.innerHTML = '<div id="dialogue-text" class="dialogue-text"></div><div id="options-container" class="options-container"></div>';
+        ui.appendChild(db);
+    }
+}
+
+// Initial Load
+loadScene('forest');
+
+// --- INPUT HANDLERS (KEYBOARD & TOUCH) ---
+window.addEventListener('keydown', (e) => {
+    if (KEYS.hasOwnProperty(e.key)) KEYS[e.key] = true;
+    if (e.key === 'l' || e.key === 'L') state.lightingEnabled = !state.lightingEnabled;
+    // R to restart only on Game Over
+    if (state.isGameOver && state.gameOverProgress >= 1 && e.key.toLowerCase() === 'r') { resetGame(); return; }
+    if ((e.key === 'e' || e.key === 'E') && !state.isDialogueOpen && !state.isGameOver) tryInteract();
+});
+window.addEventListener('keyup', (e) => { if (KEYS.hasOwnProperty(e.key)) KEYS[e.key] = false; });
+
+// Mobile Touch Handlers
+function setupMobileControls() {
+    const actionBtn = document.getElementById('btn-action');
+    const restartBtn = document.getElementById('restart-btn');
+
+    const handleTouch = (id, active) => {
+        const el = document.getElementById(id);
+        if (el) {
+            const key = el.getAttribute('data-key');
+            if (KEYS.hasOwnProperty(key)) KEYS[key] = active;
+            if (active) el.classList.add('active');
+            else el.classList.remove('active');
+
+            // Trigger E interaction on press
+            if (key === 'e' && active && !state.isDialogueOpen && !state.isGameOver) tryInteract();
+        }
+    };
+
+    ['btn-up', 'btn-down', 'btn-left', 'btn-right'].forEach(id => {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.addEventListener('pointerdown', (e) => { e.preventDefault(); handleTouch(id, true); });
+        el.addEventListener('pointerup', (e) => { e.preventDefault(); handleTouch(id, false); });
+        el.addEventListener('pointerleave', (e) => { e.preventDefault(); handleTouch(id, false); });
+    });
+
+    if(actionBtn) {
+        actionBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); handleTouch('btn-action', true); });
+        actionBtn.addEventListener('pointerup', (e) => { e.preventDefault(); handleTouch('btn-action', false); });
+        actionBtn.addEventListener('pointerleave', (e) => { e.preventDefault(); handleTouch('btn-action', false); });
+    }
+
+    if(restartBtn) {
+        restartBtn.addEventListener('click', () => resetGame());
+        restartBtn.addEventListener('pointerdown', (e) => e.stopPropagation()); // Prevent game clicks
+    }
+}
+setupMobileControls();
+
+function tryInteract() {
+    if (state.isDialogueOpen || state.isGameOver) return;
+
+    // 1) Doors (highest priority)
+    const route = findNearbyDoorRoute();
+    if (route && route.target) {
+        loadScene(route.target, route.startX, route.startY);
+        return;
+    }
+
+    // 2) Exterior Nastia
+    if (npc.active) {
+        const dist = Math.hypot((player.x+12)-(npc.x+12), (player.y+12)-(npc.y+12));
+        if (dist < 48) { startDialogue(npc); return; }
+    }
+
+    // 3) Interior NPCs (including indoor Nastia)
+    const nearest = getNearestSceneNpc(48);
+    if (nearest) {
+        startDialogue(nearest);
+        return;
+    }
+
+    // 4) Items
+    if (item.active && !item.collected) {
+        const dist = Math.hypot((player.x+12)-(item.x+12), (player.y+12)-(item.y+12));
+        if (dist < 40) {
+            item.collected = true;
+            item.active = false;
+            state.hasRing = true;
+        }
+    }
+}
+
+function startDialogue(target) {
+    if (state.floodActive) return; // No talk during flood
+
+    state.currentTalker = target || null;
+    state.isDialogueOpen = true;
+    ensureUI();
+    const db = document.getElementById('dialogue-box');
+    if (db) db.style.display = 'block';
+
+    const talkingToNastia = isNastiaEntity(state.currentTalker);
+
+    // Proposal Logic (ONLY when talking to Nastia, indoors or outdoors)
+    if (talkingToNastia && state.proposed) {
+        showDialogueNode(dialogueTree.happyEnd);
+    } else if (talkingToNastia && state.hasRing) {
+        showDialogueNode(dialogueTree.proposalOptions);
+    } else {
+        showDialogueNode(dialogueTree.start);
+    }
+}
+
+function showDialogueNode(node) {
+    if (!node) return handleChoice('end');
+    const dBox = document.getElementById('dialogue-text');
+    const oBox = document.getElementById('options-container');
+    if (!dBox || !oBox) return;
+
+    // Execute triggers immediately on show (for visual effects)
+    if (node.trigger) executeTrigger(node.trigger);
+
+    // Speaker label wiring (do not change dialogue text content)
+    let speakerLabel = (node.speaker || 'Rico');
+    if (speakerLabel === 'Nastia' && state.currentTalker && state.currentTalker.name) {
+        speakerLabel = state.currentTalker.name;
+    }
+
+    dBox.innerHTML = `<span style="color:#f39c12">${speakerLabel}:</span><br>${node.text || '...'}`;
+    oBox.innerHTML = '';
+    (node.options || [{text:"End", next:"end"}]).forEach((opt, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerText = opt.text;
+        btn.onclick = () => {
+             // Execute trigger on choice selection if present on option
+            if (opt.trigger) executeTrigger(opt.trigger);
+            handleChoice(opt.next);
+        };
+        oBox.appendChild(btn);
+        if (index === 0) btn.focus();
+    });
+}
+
+function executeTrigger(triggerName) {
+    if (triggerName === 'startFlood') {
+        state.floodActive = true;
+        document.getElementById('water-meter-container').style.display = 'block';
+    } else if (triggerName === 'becomeBride') {
+        state.proposed = true;
+        npc.isBride = true;
+        spawnBabies();
+    } else if (triggerName === 'windEffect') {
+        state.shake = 15;
+        // Add wind particles
+        for(let i=0; i<20; i++) {
+            state.particles.push({
+                x: state.camera.x + Math.random()*640,
+                y: state.camera.y + Math.random()*480,
+                vx: -100 - Math.random()*50,
+                vy: 0,
+                life: 2,
+                color: '#fff'
+            });
+        }
+    } else if (triggerName === 'blushEffect') {
+        player.blushing = true;
+        setTimeout(() => player.blushing = false, 2000);
+    }
+}
+
+function handleChoice(key) {
+    const db = document.getElementById('dialogue-box');
+    const gc = document.getElementById('gameCanvas');
+    if (key === 'end' || !dialogueTree[key]) {
+        state.isDialogueOpen = false;
+        state.currentTalker = null;
+        if (db) db.style.display = 'none';
+        if (gc) gc.focus();
+    }
+    else showDialogueNode(dialogueTree[key]);
+}
+
+// Safe collision check
+function isColliding(x, y, w, h) {
+    const corners = [{x,y}, {x:x+w,y}, {x,y:y+h}, {x:x+w,y:y+h}];
+    for(let p of corners) {
+        const c = Math.floor(p.x/CONFIG.TILE_SIZE);
+        const r = Math.floor(p.y/CONFIG.TILE_SIZE);
+        if(r<0||r>=CONFIG.ROWS||c<0||c>=CONFIG.COLS) return true;
+
+        const row = state.mapLayout[r];
+        if (!row) return true;
+        const tile = row[c];
+
+        if(tile === 1) return true;
+        if(tile === 3) handleHazard();
+    }
+    return false;
+}
+
+function handleHazard() {
+    const now = Date.now();
+    if (now > player.invulnerableUntil) {
+        player.health--; player.invulnerableUntil = now + 1000; state.shake = 10;
+        if (player.health <= 0) state.isGameOver = true;
+    }
+}
+
+function resetGame() {
+    state.isGameOver = false; state.gameOverProgress = 0; state.hasRing = false; state.hasMetNastia = false; state.rupees = 0;
+    state.proposed = false; npc.isBride = false; state.babies = [];
+    state.floodActive = false; state.waterLevel = 0;
+    item.collected = false;
+    player.health = 3; player.invulnerableUntil = 0; player.visible = true;
+    state.currentTalker = null;
+    state.sceneNpcs = [];
+
+    // Reset enemies cleanly (RESTORED)
+    resetEnemies();
+
+    document.getElementById('water-meter-container').style.display = 'none';
+    document.getElementById('restart-btn').style.display = 'none';
+    loadScene('forest', 4, 6);
+}
+
+function update(dt) {
+    if (dt > 0.1) dt = 0.1;
+
+    state.time += dt;
+    if (state.isGameOver) {
+        if (state.gameOverProgress < 1) state.gameOverProgress = Math.min(1, state.gameOverProgress + dt);
+        // Show restart button when fully faded out
+        if (state.gameOverProgress >= 1) document.getElementById('restart-btn').style.display = 'block';
+        return;
+    }
+
+    // FLOOD LOGIC
+    if (state.floodActive) {
+        state.waterLevel += dt * 3; // Rises 3% per second roughly
+        document.getElementById('water-meter-fill').style.width = Math.min(100, state.waterLevel) + '%';
+        if (state.waterLevel >= 100) {
+            state.isGameOver = true;
+        }
+
+        // Rain particles
+        if (state.particles.length < 100) {
+            state.particles.push({
+                x: state.camera.x + Math.random()*640,
+                y: state.camera.y - 10,
+                vx: -20,
+                vy: 300,
+                life: 1.5,
+                color: '#3498db'
+            });
+        }
+    }
+
+    // Interaction Prompt Logic (doors OR Nastia OR interior NPCs)
+    const prompt = document.getElementById('interaction-prompt');
+    if (prompt) {
+        let canShow = false;
+
+        if (!state.isDialogueOpen && !state.floodActive) {
+            // Doors
+            const route = findNearbyDoorRoute();
+            if (route) canShow = true;
+
+            // Exterior Nastia
+            if (!canShow && npc.active) {
+                const dist = Math.hypot((player.x+12)-(npc.x+12), (player.y+12)-(npc.y+12));
+                if (dist < 48) canShow = true;
+            }
+
+            // Interior NPCs
+            if (!canShow) {
+                const nearest = getNearestSceneNpc(48);
+                if (nearest) canShow = true;
+            }
+        }
+
+        prompt.style.opacity = canShow ? 1 : 0;
+    }
+
+    if (state.isDialogueOpen) return;
+
+    let dx = 0, dy = 0;
+    if (KEYS.w || KEYS.ArrowUp) dy = -1;
+    if (KEYS.s || KEYS.ArrowDown) dy = 1;
+    if (KEYS.a || KEYS.ArrowLeft) dx = -1;
+    if (KEYS.d || KEYS.ArrowRight) dx = 1;
+    if (dx!==0 && dy!==0) { dx*=0.707; dy*=0.707; }
+
+    let currentSpeed = player.speed;
+    if (state.floodActive) currentSpeed *= 0.7; // Slippery/Slower
+
+    player.isMoving = (dx !== 0 || dy !== 0);
+    const nextX = player.x + dx*currentSpeed*dt;
+    const nextY = player.y + dy*currentSpeed*dt;
+
+    if (!isColliding(nextX, player.y, player.w, player.h)) player.x = nextX;
+    if (!isColliding(player.x, nextY, player.w, player.h)) player.y = nextY;
+
+    if(dy<0) player.dir='up'; else if(dy>0) player.dir='down';
+    else if(dx<0) player.dir='left'; else if(dx>0) player.dir='right';
+
+    // Safe Transition Check (edge transitions still work)
+    const pcx = Math.floor((player.x + 12)/32);
+    const pcy = Math.floor((player.y + 12)/32);
+    const sData = SCENES[state.scene] || SCENES.forest;
+
+    if (sData.transitions) {
+        const trans = sData.transitions(pcx, pcy);
+        if (trans && trans.target) {
+            loadScene(trans.target, trans.startX, trans.startY);
+            return;
+        }
+    }
+
+    // Camera
+    const targetCamX = player.x + player.w/2 - CONFIG.VIEWPORT_W/2;
+    const targetCamY = player.y + player.h/2 - CONFIG.VIEWPORT_H/2;
+    state.camera.x += (targetCamX - state.camera.x) * 5 * dt;
+    state.camera.y += (targetCamY - state.camera.y) * 5 * dt;
+
+    // Rupees
+    if (Array.isArray(state.rupeesList)) {
+        state.rupeesList.forEach(r => {
+            if(!r.collected && player.x < r.x + 16 && player.x + player.w > r.x && player.y < r.y + 16 && player.y + player.h > r.y) {
+                r.collected = true; state.rupees++;
+            }
+        });
+    }
+
+    // Enemies update (RESTORED)
+    updateEnemies(dt);
+
+    // Particles Update
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+        const p = state.particles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.life -= dt;
+        if(p.life <= 0) state.particles.splice(i, 1);
+    }
+
+    // Boat animation (flood panic)
+    if (state.floodActive && npc.active) {
+        // Orbit npc
+        const boatX = npc.x + Math.sin(state.time*2) * 20;
+        const boatY = npc.y + Math.cos(state.time*2) * 10;
+        // Just purely visual, handled in draw
+    }
+
+    player.visible = (Date.now() < player.invulnerableUntil) ? (Math.floor(Date.now()/100)%2===0) : true;
+    if (state.shake > 0) state.shake = Math.max(0, state.shake - 30 * dt);
+}
+
+// --- RENDERER ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function safeGetTile(name) {
+    return assets.tiles[name] || createPlaceholderImage('#f0f');
+}
+
+function drawSandhausenHouseWorld() {
+    // Only in forest/Heidelberg
+    if (state.scene !== 'forest') return;
+
+    const h = SANDHAUSEN_HOUSE;
+
+    // Short path to the door (world-space)
+    const doorCX = h.doorTile.x * 32 + 16;
+    const doorY = h.doorTile.y * 32 + 2;
+    ctx.save();
+    for (let i=0; i<5; i++) {
+        ctx.globalAlpha = 0.9;
+        ctx.drawImage(safeGetTile('path'), doorCX - 16, doorY + i*32);
+        // add a couple "stones"
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(doorCX - 10 + (i%2)*4, doorY + i*32 + 10, 2, 2);
+        ctx.fillRect(doorCX + 6 - (i%3)*2, doorY + i*32 + 18, 1, 1);
+    }
+    ctx.restore();
+
+    // House palette
+    const roofDark = "#3d2e1e";
+    const roofMid = "#5c4033";
+    const roofHi  = "#7b5a45";
+
+    const wallBase = "#2c2c30";
+    const wallHi   = "#3c3c40";
+    const wallLo   = "#1f1f24";
+
+    const frame = "#d7ccc8";
+    const wood  = "#8d6e63";
+    const woodLo = "#6d4c41";
+
+    // Roof overhang
+    const roofX = h.x - 10;
+    const roofY = h.y - 26;
+    const roofW = h.w + 20;
+    const roofH = 26;
+
+    // Roof body with scalloped edge
+    ctx.fillStyle = roofMid;
+    ctx.fillRect(roofX, roofY, roofW, roofH);
+    ctx.fillStyle = roofDark;
+    for (let x = roofX; x < roofX + roofW; x += 6) {
+        ctx.fillRect(x, roofY + roofH - 6, 4, 2);
+    }
+
+    // Roof highlight ridge
+    ctx.fillStyle = roofHi;
+    ctx.fillRect(roofX + 8, roofY + 6, roofW - 16, 3);
+
+    // Shadow under roof (overhang)
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(h.x - 6, h.y - 2, h.w + 12, 6);
+
+    // Walls
+    ctx.fillStyle = wallBase;
+    ctx.fillRect(h.x, h.y, h.w, h.h);
+
+    // Wall texture (subtle bricks)
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    for (let yy = h.y + 10; yy < h.y + h.h - 10; yy += 10) {
+        for (let xx = h.x + 6 + ((yy/10)%2)*4; xx < h.x + h.w - 6; xx += 12) {
+            ctx.fillRect(xx, yy, 6, 2);
+        }
+    }
+    // Wall shading
+    ctx.fillStyle = wallHi;
+    ctx.fillRect(h.x + 2, h.y + 2, 2, h.h - 4);
+    ctx.fillStyle = wallLo;
+    ctx.fillRect(h.x + h.w - 4, h.y + 2, 2, h.h - 4);
+
+    // Windows (with frames and highlights)
+    function drawWindow(wx, wy) {
+        ctx.fillStyle = frame;
+        ctx.fillRect(wx-2, wy-2, 20, 20);
+        ctx.fillStyle = "#1c2b3a";
+        ctx.fillRect(wx, wy, 16, 16);
+        ctx.fillStyle = "#3498db";
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(wx+1, wy+2, 14, 12);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "rgba(255,255,255,0.45)";
+        ctx.fillRect(wx+2, wy+3, 4, 3);
+        ctx.fillRect(wx+9, wy+5, 2, 2);
+        // muntins
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillRect(wx+7, wy+1, 1, 14);
+        ctx.fillRect(wx+1, wy+7, 14, 1);
+    }
+
+    drawWindow(h.x + 22, h.y + 28);
+    drawWindow(h.x + h.w - 38, h.y + 28);
+
+    // Door (aligned near door tile) with frame + steps
+    const dx = h.doorTile.x * 32 + 6;
+    const dy = h.doorTile.y * 32 + 2;
+
+    // Steps
+    ctx.fillStyle = woodLo;
+    ctx.fillRect(dx - 4, dy + 2, 28, 6);
+    ctx.fillStyle = "#2c2c2c";
+    ctx.fillRect(dx - 2, dy + 6, 24, 4);
+
+    // Door frame
+    ctx.fillStyle = frame;
+    ctx.fillRect(dx - 2, dy - 34, 24, 38);
+    // Door slab
+    ctx.fillStyle = wood;
+    ctx.fillRect(dx, dy - 32, 20, 34);
+    // Door shadow + panel lines
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.fillRect(dx + 12, dy - 32, 8, 34);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(dx + 2, dy - 30, 1, 30);
+    ctx.fillRect(dx + 6, dy - 30, 1, 30);
+    // Handle
+    ctx.fillStyle = "#d7ccc8";
+    ctx.fillRect(dx + 14, dy - 18, 2, 2);
+
+    // WORLD-SPACE label anchored above the house (not screen-space)
+    ctx.save();
+    ctx.font = "10px monospace";
+    ctx.textAlign = "center";
+    const lx = h.x + h.w / 2;
+    const ly = h.y - 30;
+    // Backing box
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillRect(lx - 78, ly - 10, 156, 14);
+    ctx.fillStyle = "#ecf0f1";
+    ctx.fillText("Sandhausen Apartment", lx, ly);
+    ctx.restore();
+}
+
+function drawSandhausenInteriorDecor() {
+    if (state.scene !== 'sandhausenHouse') return;
+
+    // Three room zones (world-space, inside camera translate)
+    // Room 1 (closest to entrance): Ecuador (yellow/blue/red)
+    ctx.fillStyle = "rgba(241,196,15,0.25)"; // yellow
+    ctx.fillRect(1*32, 1*32, 5*32, 3*32);
+    ctx.fillStyle = "rgba(52,152,219,0.25)"; // blue
+    ctx.fillRect(1*32, 2*32, 5*32, 1*32);
+    ctx.fillStyle = "rgba(231,76,60,0.25)"; // red
+    ctx.fillRect(1*32, 3*32, 5*32, 1*32);
+
+    // Room 2: Japan (white/red minimalist)
+    ctx.fillStyle = "rgba(236,240,241,0.18)";
+    ctx.fillRect(7*32, 1*32, 4*32, 3*32);
+    ctx.fillStyle = "rgba(231,76,60,0.25)";
+    ctx.beginPath();
+    ctx.arc(9*32 + 16, 2*32 + 16, 10, 0, Math.PI*2);
+    ctx.fill();
+
+    // Room 3 (largest): Nastia room (tasteful Ukraine blue/yellow + bed + desk)
+    ctx.fillStyle = "rgba(52,152,219,0.18)";
+    ctx.fillRect(12*32, 7*32, 7*32, 6*32);
+    ctx.fillStyle = "rgba(241,196,15,0.14)";
+    ctx.fillRect(12*32, 10*32, 7*32, 3*32);
+
+    // Bed
+    ctx.fillStyle = "#2c3e50";
+    ctx.fillRect(13*32, 9*32, 3*32, 2*32);
+    ctx.fillStyle = "#ecf0f1";
+    ctx.fillRect(13*32 + 4, 9*32 + 4, 20, 12);
+
+    // Desk
+    ctx.fillStyle = "#6d4c41";
+    ctx.fillRect(17*32, 9*32, 2*32, 1*32);
+    ctx.fillStyle = "#d7ccc8";
+    ctx.fillRect(17*32 + 6, 9*32 + 6, 10, 8);
+}
+
+function drawEnemy(e) {
+    if (!e || !e.alive) return;
+
+    // Shadow
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(e.x + e.w/2, e.y + e.h - 2, 8, 3, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Enemy sprite: "Russian colors" banded body (creative but readable)
+    const flash = (Date.now() < (e.flashUntil||0));
+    const outline = flash ? "#ffffff" : "rgba(0,0,0,0.85)";
+    const cWhite = "#ecf0f1";
+    const cBlue  = "#3498db";
+    const cRed   = "#e74c3c";
+    const cDark  = "#111";
+
+    const sx = Math.round(e.x);
+    const sy = Math.round(e.y);
+
+    // outline block
+    ctx.fillStyle = outline;
+    ctx.fillRect(sx-1, sy-1, e.w+2, e.h+2);
+
+    // body bands
+    ctx.fillStyle = cWhite;
+    ctx.fillRect(sx+1, sy+1, e.w-2, Math.floor((e.h-2)/3));
+    ctx.fillStyle = cBlue;
+    ctx.fillRect(sx+1, sy+1+Math.floor((e.h-2)/3), e.w-2, Math.floor((e.h-2)/3));
+    ctx.fillStyle = cRed;
+    ctx.fillRect(sx+1, sy+1+Math.floor((e.h-2)*2/3), e.w-2, (e.h-2) - Math.floor((e.h-2)*2/3));
+
+    // eyes
+    const ex = (e.dir === 'left') ? -1 : (e.dir === 'right' ? 1 : 0);
+    ctx.fillStyle = cDark;
+    ctx.fillRect(sx + 6 + ex, sy + 7, 2, 2);
+    ctx.fillRect(sx + 13 + ex, sy + 7, 2, 2);
+
+    // little "helmet" line
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(sx+1, sy+1, e.w-2, 2);
+}
+
+function draw() {
+    if (!ctx) return;
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, CONFIG.VIEWPORT_W, CONFIG.VIEWPORT_H);
+
+    let camX = Math.floor(state.camera.x);
+    let camY = Math.floor(state.camera.y);
+    if (state.shake > 0) {
+        camX += (Math.random() - 0.5) * state.shake;
+        camY += (Math.random() - 0.5) * state.shake;
+    }
+
+    // BG
+    if (!CONFIG.DEBUG_MODE) {
+        ctx.fillStyle = (currentPalette.void || '#111');
+        ctx.fillRect(0, 0, CONFIG.VIEWPORT_W, CONFIG.VIEWPORT_H);
+    } else {
+        ctx.fillStyle = '#303';
+        ctx.fillRect(0, 0, CONFIG.VIEWPORT_W, CONFIG.VIEWPORT_H);
+    }
+
+    if (assets.bg) {
+        const px = camX * 0.1, py = camY * 0.1;
+        ctx.drawImage(assets.bg, -px % CONFIG.VIEWPORT_W, -py % CONFIG.VIEWPORT_H);
+        ctx.drawImage(assets.bg, (-px % CONFIG.VIEWPORT_W) + CONFIG.VIEWPORT_W, -py % CONFIG.VIEWPORT_H);
+        ctx.drawImage(assets.bg, -px % CONFIG.VIEWPORT_W, (-py % CONFIG.VIEWPORT_H) + CONFIG.VIEWPORT_H);
+    }
+
+    ctx.save();
+    ctx.translate(-camX, -camY);
+
+    // TILES
+    const startCol = Math.floor(camX / CONFIG.TILE_SIZE) - 1;
+    const endCol = startCol + (CONFIG.VIEWPORT_W / CONFIG.TILE_SIZE) + 2;
+    const startRow = Math.floor(camY / CONFIG.TILE_SIZE) - 1;
+    const endRow = startRow + (CONFIG.VIEWPORT_H / CONFIG.TILE_SIZE) + 2;
+
+    for(let r = startRow; r < endRow; r++) {
+        for(let c = startCol; c < endCol; c++) {
+            if (r >= 0 && r < CONFIG.ROWS && c >= 0 && c < CONFIG.COLS) {
+                const row = state.mapLayout[r];
+                const tile = row ? row[c] : 1;
+                const x = c * CONFIG.TILE_SIZE;
+                const y = r * CONFIG.TILE_SIZE;
+
+                if (tile === 1) { // Wall
+                    ctx.drawImage(safeGetTile('wallTop'), x, y);
+                    if (r+1 < CONFIG.ROWS && state.mapLayout[r+1] && state.mapLayout[r+1][c] !== 1) {
+                        ctx.drawImage(safeGetTile('wall
 
